@@ -5,19 +5,15 @@ import com.jtulayan.main.PropWrapper;
 import jaci.pathfinder.Pathfinder;
 import jaci.pathfinder.Trajectory;
 import jaci.pathfinder.Waypoint;
-import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.beans.value.ObservableValueBase;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
-import javafx.event.Event;
 import javafx.event.EventHandler;
-import javafx.event.EventType;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
-import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
@@ -31,20 +27,19 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.util.Callback;
 import javafx.util.converter.DoubleStringConverter;
+import javafx.scene.chart.Axis;
 
-import javax.swing.event.ChangeEvent;
-import javax.tools.Tool;
 import java.awt.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.*;
 import java.util.List;
 
@@ -122,6 +117,22 @@ public class MPGenController {
     public void initialize() {
         backend = new ProfileGenerator();
         properties = PropWrapper.getProperties();
+
+        chtPosition.onMouseClickedProperty().set(new EventHandler<MouseEvent>() {
+            public void handle(MouseEvent mev)
+            {
+                Axis<Double> xAxis = chtPosition.getXAxis();
+                Axis<Double> yAxis = chtPosition.getYAxis();
+
+              
+                Double xScaler = xAxis.getWidth() / xAxis.getTickMarks().size();
+                Double yScaler = yAxis.getHeight() / yAxis.getTickMarks().size();
+
+                waypointsList.add(new Waypoint((mev.getX() - xAxis.getZeroPosition()) / xScaler, (yAxis.getZeroPosition() - mev.getY()) / yScaler, 0));
+                
+            }
+        });
+
 
         btnDelete.setDisable(true);
 
@@ -662,6 +673,11 @@ public class MPGenController {
                 alert.showAndWait();
             }
         }
+        else
+        {
+            chtPosition.getData().clear();
+            chtVelocity.getData().clear();
+        }
 
         return true;
     }
@@ -774,6 +790,9 @@ public class MPGenController {
         if (!dir.isEmpty()) {
             try {
                 imgOverlay.setImage(new Image(new FileInputStream(dir)));
+
+                // Wire up the clicks on the image to click through to the chart
+                imgOverlay.setOnMouseClicked(chtPosition.getOnMouseClicked());
             } catch (FileNotFoundException e) {
                 Alert alert = AlertFactory.createExceptionAlert(e);
 
