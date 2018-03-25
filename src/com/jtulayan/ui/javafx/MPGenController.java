@@ -34,6 +34,9 @@ import javafx.util.Callback;
 import javafx.util.converter.DoubleStringConverter;
 import javafx.scene.chart.Axis;
 
+import javax.swing.*;
+import javax.swing.event.ChangeEvent;
+import javax.tools.Tool;
 import java.awt.*;
 import java.io.File;
 import java.io.FileInputStream;
@@ -322,7 +325,10 @@ public class MPGenController {
         );
 
         waypointsList = FXCollections.observableList(backend.getWaypointsList());
-        waypointsList.addListener((ListChangeListener<Waypoint>) c -> generateTrajectories());
+        waypointsList.addListener((ListChangeListener<Waypoint>) c -> {
+            btnClearPoints.setDisable(waypointsList.size() == 0);
+            generateTrajectories();
+        });
 
         tblWaypoints.setItems(waypointsList);
         tblWaypoints.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
@@ -482,6 +488,76 @@ public class MPGenController {
     }
 
     @FXML
+    private void showImportDialog() {
+        FileChooser fileChooser = new FileChooser();
+
+        fileChooser.setInitialDirectory(new File(System.getProperty("user.dir")));
+        fileChooser.setTitle("Import");
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Vannaka Properties File", "*.bot")
+        );
+
+        File result = fileChooser.showOpenDialog(root.getScene().getWindow());
+
+        if (result != null) {
+            Dialog<ProfileGenerator.Units> unitsSelector = new Dialog<>();
+            ButtonType okButtonType = new ButtonType("Ok", ButtonBar.ButtonData.OK_DONE);
+            Optional<ProfileGenerator.Units> unitsResult = null;
+            GridPane grid = new GridPane();
+            ToggleGroup radGroup = new ToggleGroup();
+            RadioButton
+                radImperial = new RadioButton("Imperial (ft)"),
+                radMetric = new RadioButton("Metric (m)");
+
+            // Some header stuff
+            unitsSelector.setTitle("Select Units");
+            unitsSelector.setHeaderText("Select the distance units being used");
+
+            // Some other UI stuff
+            grid.setVgap(10);
+            grid.setPadding(new Insets(20, 150, 10, 10));
+
+            grid.add(radImperial, 0, 0);
+            grid.add(radMetric, 0, 1);
+
+            radImperial.setToggleGroup(radGroup);
+            radImperial.selectedProperty().set(true);
+            radMetric.setToggleGroup(radGroup);
+
+            unitsSelector.getDialogPane().setContent(grid);
+
+            // Add all buttons
+            unitsSelector.getDialogPane().getButtonTypes().addAll(okButtonType, ButtonType.CANCEL);
+            unitsSelector.setResultConverter(buttonType -> {
+                if (buttonType.getButtonData() == ButtonBar.ButtonData.OK_DONE) {
+                    if (radMetric.selectedProperty().getValue())
+                        return ProfileGenerator.Units.METRIC;
+                    else
+                        return ProfileGenerator.Units.IMPERIAL;
+                }
+
+                return null;
+            });
+
+            unitsResult = unitsSelector.showAndWait();
+
+            unitsResult.ifPresent(u -> {
+                backend.clearPoints();
+                try {
+                    backend.importBotFile(result, u);
+
+                    updateFrontend();
+                    generateTrajectories();
+                } catch (Exception e) {
+                    Alert alert = AlertFactory.createExceptionAlert(e);
+
+                    alert.showAndWait();
+                }
+            });
+        }
+    }
+
+    @FXML
     private void showAddPointDialog() {
         Dialog<Waypoint> waypointDialog = new Dialog<>();
         ButtonType addButtonType = new ButtonType("Add", ButtonBar.ButtonData.OK_DONE);
@@ -579,12 +655,10 @@ public class MPGenController {
             if (t == ButtonType.OK) {
                 backend.clearWorkingFiles();
                 backend.resetValues();
-                backend.clearPoints();
+                waypointsList.clear();
 
                 updateFrontend();
-
                 updateChartAxes();
-                generateTrajectories();
 
                 mnuFileSave.setDisable(true);
             }
@@ -659,8 +733,6 @@ public class MPGenController {
         if (waypointsList.size() > 1) {
             try {
                 backend.updateTrajectories();
-                repopulatePosChart();
-                repopulateVelChart();
             } catch (Pathfinder.GenerationException e) {
                 Toolkit.getDefaultToolkit().beep();
 
@@ -678,6 +750,9 @@ public class MPGenController {
             chtPosition.getData().clear();
             chtVelocity.getData().clear();
         }
+
+        repopulatePosChart();
+        repopulateVelChart();
 
         return true;
     }
@@ -833,7 +908,6 @@ public class MPGenController {
 
     /**
      * Refreshes the waypoints table by clearing the waypoint list and repopulating it.
-     *
      */
     public void refreshWaypointTable() {
         // Bad way to update the waypoint list...
